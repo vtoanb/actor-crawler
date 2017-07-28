@@ -20,7 +20,6 @@ class Scheduler
   end
 
   def rock!
-    p 'rock'
     every(REQUEST_INTERVAL) do
       raw_html << requester.request(urls.pop.first)
     end

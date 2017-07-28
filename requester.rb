@@ -5,11 +5,14 @@ require 'csv'
 # Requester
 class Requester
   include Celluloid
+  TIMEOUT = 0.1
 
   # Celluloid not return as normal
   def request(url)
     p "requesting...#{url}"
-    result = Timeout.timeout(10) { Nokogiri::HTML(open(url)) } rescue 'TIMEOUT_ERR'
+    result = Timeout.timeout(TIMEOUT) { Nokogiri::HTML(open(url)) }
     [url, result]
+  rescue
+    [url, 'TIMEOUT-ERR']
   end
 end

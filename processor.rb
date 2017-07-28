@@ -14,7 +14,6 @@ class Processor
   def process(data)
     @st = :busy
     p "processing...#{data[0]}"
-    p data
     kw = data[1].xpath("//meta[@name='keywords']/@content").first.value
     # Write result
     CSV.open('./data/townwork-result.csv', 'ab') { |csv| csv << [data[0], kw] }
