@@ -1,21 +1,20 @@
-# require 'celluloid/debug'
 require './requester.rb'
-require './processor.rb'
-require './scheduler.rb'
+require 'timers'
+require 'redis'
 
-names = (1..10).map { |i| "processor_#{i}" }
+# Celluloid.supervise type: Requester, as: :requester
+Requester.supervise as: :requester
 
-# Create 10 proxy crawlers
-container = Celluloid::Supervision::Container.new do
-  names.each { |name| Celluloid.supervise type: Processor, as: name }
+# requester = Celluloid::Actor[:requester]
+timers = Timers::Group.new
+redis = Redis.new
+
+begin
+  timers.every(1) { Celluloid::Actor[:requester].async.process(redis.lpop('urls')) }
+  loop { timers.wait }
+rescue => e
+  p "Error --> #{e}"
+  p 'recover....'
+  sleep 1
+  retry
 end
-
-processors = names.map { |name| Celluloid::Actor[name] }
-
-# Supervise those proxy crawlers
-container.async.run
-
-Celluloid.supervise type: Requester, as: :requester
-requester = Celluloid::Actor[:requester]
-
-Scheduler.new(processors, requester).async.rock!
