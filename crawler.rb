@@ -12,7 +12,7 @@ redis = Redis.new
 begin
   timers.every(1) { Celluloid::Actor[:requester].async.process(redis.lpop('urls')) }
   loop { timers.wait }
-rescue => e
+rescue Celluloid::DeadActorError
   p "Error --> #{e}"
   p 'recover....'
   sleep 1
