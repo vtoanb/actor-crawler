@@ -3,6 +3,7 @@ require 'nokogiri'
 require 'open-uri'
 require 'csv'
 require 'timeout'
+require 'pry'
 
 # Requester
 class Requester
@@ -10,6 +11,7 @@ class Requester
 
   # Request
   def request(url)
+    p 'requesting...'
     result = Timeout.timeout(3) { Nokogiri::HTML(open(url)) } rescue 'TIMEOUT_ERR'
     [url, result]
   end
@@ -24,11 +26,13 @@ class Processor
   end
 
   # Heavy processing
-  def process(html_data)
+  def process(data)
     @st = :busy
-    kw = html_data.xpath("//meta[@name='keywords']/@content").first.try(:value).try(:split, ',')
+    p 'processing...'
+    binding.pry
+    kw = data[1].xpath("//meta[@name='keywords']/@content").first.try(:value).try(:split, ',')
     # Write result
-    CSV.open('./db/townwork-result.csv', 'ab') { |csv| csv << [url, kw] }
+    CSV.open('./townwork-result.csv', 'ab') { |csv| csv << [data[0], kw] }
     @st = :free
   end
 
@@ -44,7 +48,7 @@ class Crawler
 
   attr_reader :raw_html, :processor, :requester, :urls
 
-  def initialize(processor, urls)
+  def initialize(processor, requester, urls)
     @processor = processor
     @requester = requester
     @raw_html = []
@@ -52,37 +56,39 @@ class Crawler
   end
 
   def free_processor
-    processor.find { |actor| actor.free? }
+    processor.find(&:free?)
   end
 
   def rock!
     every(REQUEST_INTERVAL) {
       raw = requester.async.request(urls.pop)
-      raw_html << raw if raw.present?
+      raw_html << raw
     }
 
     loop do
-      if raw_html.blank?
+      if raw_html.empty?
+        p 'sleeping...'
         sleep 1 # Take a rest
-        next if raw_html.blank?
+        next if raw_html.empty?
       end
 
       raw_html.delete_if do |raw|
         processor = free_processor
-        processor.async.process(raw) if processor.present?
-        processor.present?
+        processor.async.process(raw) unless processor.nil?
+        !processor.nil?
       end
     end
   end
 end
 
 # get list of URLS
-urls = CSV.read('./db/sitemap.csv')
+urls = CSV.read('./sitemap.csv')
+
+names = (1..10).map { |i| "processor_#{i}" }
 
 # Create 10 proxy crawlers
 container = Celluloid::Supervision::Container.new do
-  names = (1..10).map { |name| "processor_#{name}" }
-  names.each { |name| Celluloid.supervise type: Processor, as: "processor_#{name}" }
+  names.each { |name| Celluloid.supervise type: Processor, as: name }
 end
 
 processors = names.map { |name| Celluloid::Actor[name] }
